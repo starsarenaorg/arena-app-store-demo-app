@@ -1,103 +1,157 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { parseEther, formatEther } from 'viem';
+import { ArenaAppStoreSdk } from 'arena-app-store-sdk';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const sdkRef = useRef<ArenaAppStoreSdk | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [balance, setBalance] = useState<string>('');
+  const [profile, setProfile] = useState<string>('');
+  const [transactionResult, setTransactionResult] = useState<string>('');
+  const [toAddress, setToAddress] = useState('');
+  const [amount, setAmount] = useState('');
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  useEffect(() => {
+    if (typeof window === 'undefined') return; // Prevents SSR error
+
+    const sdk = new ArenaAppStoreSdk({
+      projectId: '8631087374c7fee91d66744f57762ac0',
+      metadata: {
+        name: 'Arena Demo App',
+        description: 'The Arena App Store Demo App',
+        url: window.location.origin,
+        icons: ['https://avatars.githubusercontent.com/u/37784886'],
+      },
+    });
+
+    sdk.on('walletChanged', ({ address }: { address: any }) => {
+      setWalletAddress(address || null);
+    });
+
+    sdkRef.current = sdk;
+  }, []);
+
+  const getUserProfile = async () => {
+    try {
+      const result = await sdkRef.current?.sendRequest('getUserProfile');
+      setProfile(JSON.stringify(result, null, 2));
+    } catch (err: any) {
+      setProfile(`Error: ${err.message}`);
+    }
+  };
+
+  const getWalletBalance = async () => {
+    try {
+      const provider = sdkRef.current?.provider;
+      const account = provider?.accounts[0];
+      if (!provider || !account) throw new Error('Wallet not connected');
+
+      const rawBalance = await provider.request({
+        method: 'eth_getBalance',
+        params: [account, 'latest'],
+      });
+
+      const balanceInEth = formatEther(BigInt(rawBalance as any));
+      setBalance(`Balance: ${balanceInEth} AVAX`);
+    } catch (err: any) {
+      setBalance(`Error: ${err.message}`);
+    }
+  };
+
+  const sendTransaction = async () => {
+    try {
+      const provider = sdkRef.current?.provider;
+      const account = provider?.accounts[0];
+      if (!provider || !account) throw new Error('Wallet not connected');
+      if (!toAddress || !amount) throw new Error('Please fill all fields');
+
+      const value = parseEther(amount);
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: account,
+          to: toAddress,
+          value: value.toString(),
+        }],
+      });
+
+      setTransactionResult(`Transaction sent! Hash: ${txHash}`);
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-neutral-900 text-white p-8">
+      <div className="max-w-2xl mx-auto space-y-8">
+        <h1 className="text-4xl font-bold">Arena Demo App</h1>
+
+        <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-semibold">Wallet Info</h2>
+          <p>
+            Connected Wallet:{" "}
+            <span className="text-blue-400 font-mono">
+              {walletAddress || "Not connected"}
+            </span>
+          </p>
+          <button
+            className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+            onClick={getWalletBalance}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            Get Balance
+          </button>
+          <pre className="bg-black p-3 rounded overflow-x-auto">{balance}</pre>
+        </section>
+
+        <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-semibold">User Profile</h2>
+          <button
+            className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+            onClick={getUserProfile}
           >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            Get User Profile
+          </button>
+          <pre className="bg-black p-3 rounded overflow-x-auto">{profile}</pre>
+        </section>
+
+        <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-semibold">Send Transaction</h2>
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="block mb-1">To Address:</label>
+              <input
+                type="text"
+                className="w-full bg-neutral-700 text-white p-2 rounded"
+                placeholder="0x..."
+                value={toAddress}
+                onChange={(e) => setToAddress(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block mb-1">Amount (AVAX):</label>
+              <input
+                type="number"
+                min="0"
+                step="0.00000001"
+                className="w-full bg-neutral-700 text-white p-2 rounded"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <button
+              className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+              onClick={sendTransaction}
+            >
+              Send AVAX
+            </button>
+            <pre className="bg-black p-3 rounded overflow-x-auto">
+              {transactionResult}
+            </pre>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
