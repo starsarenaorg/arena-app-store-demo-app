@@ -1,8 +1,46 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { parseEther, formatEther } from 'viem';
-import { ArenaAppStoreSdk } from 'arena-app-store-sdk';
+import { ethers } from "ethers";
+import {useEffect, useRef, useState} from 'react';
+import {formatEther, parseEther} from 'viem';
+import {ArenaAppStoreSdk} from 'arena-app-store-sdk';
+
+const INCREMENT_CONTRACT_ADDRESS = '0x8D4B5309Bfcb2e4F927c9C03d68554B404B7EcCe'
+const INCREMENT_CONTRACT_ABI = [
+  {
+    "inputs": [],
+    "name": "increment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "number",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "newNumber",
+        "type": "uint256"
+      }
+    ],
+    "name": "setNumber",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
 
 export default function Home() {
   const sdkRef = useRef<ArenaAppStoreSdk | null>(null);
@@ -12,6 +50,7 @@ export default function Home() {
   const [transactionResult, setTransactionResult] = useState<string>('');
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
+  const [contractValue, setContractValue] = useState<number | string>('?');
 
   useEffect(() => {
     if (typeof window === 'undefined') return; // Prevents SSR error
@@ -83,6 +122,97 @@ export default function Home() {
     }
   };
 
+  const getContract = async () => {
+    try {
+      const provider = sdkRef.current?.provider;
+      if (!provider) throw new Error('Provider not initialized');
+
+      const browserProvider = new ethers.BrowserProvider(provider);
+      const signer = await browserProvider.getSigner();
+
+      return new ethers.Contract(
+        INCREMENT_CONTRACT_ADDRESS,
+        INCREMENT_CONTRACT_ABI,
+        signer
+      );
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  }
+
+  const fetchContractValue = async () => {
+    const contract = await getContract();
+    if (!contract) throw new Error('Contract not initialized');
+
+    const value = await contract.number(); // call the view function
+    console.log("Current number:", value.toString());
+    setContractValue(value);
+  }
+
+  const incrementNumberWithEthers = async () => {
+    try {
+      const contract = await getContract();
+      if (!contract) throw new Error('Contract not initialized');
+
+      const tx = await contract.increment(); // send transaction
+      console.log("Transaction sent:", tx);
+      setTransactionResult(`Transaction sent! Hash: ${tx.hash}`);
+
+      tx.wait().then(() => {
+        setTransactionResult(`Transaction complete!`);
+      });
+
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  }
+
+  const waitForTransaction = async (provider: any, txHash: any) => {
+    while (true) {
+      const receipt = await provider.request({
+        method: 'eth_getTransactionReceipt',
+        params: [txHash],
+      });
+
+      if (receipt) return receipt; // mined!
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  };
+
+  const incrementNumberWithRawRpc = async () => {
+    try {
+      const provider = sdkRef.current?.provider;
+      const account = provider?.accounts[0];
+      if (!provider || !account) throw new Error('Wallet not connected');
+
+      const iface = new ethers.Interface(INCREMENT_CONTRACT_ABI);
+      const data = iface.encodeFunctionData("increment", []);
+
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: account,
+          to: INCREMENT_CONTRACT_ADDRESS,
+          data: data,
+        }],
+      });
+
+      setTransactionResult(`Transaction sent! Hash: ${txHash}`);
+
+      const receipt = await waitForTransaction(provider, txHash);
+
+      if (receipt.status === "0x1") {
+        setTransactionResult(`✅ Transaction confirmed in block ${parseInt(receipt.blockNumber, 16)}`);
+      } else {
+        setTransactionResult(`❌ Transaction failed`);
+      }
+
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-neutral-900 text-white p-8">
       <div className="max-w-2xl mx-auto space-y-8">
@@ -145,6 +275,40 @@ export default function Home() {
               onClick={sendTransaction}
             >
               Send AVAX
+            </button>
+            <pre className="bg-black p-3 rounded overflow-x-auto">
+              {transactionResult}
+            </pre>
+          </div>
+        </section>
+
+        <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-semibold">Increment Contract Interaction</h2>
+          <div className="flex flex-col gap-4">
+            <div>
+              <div className="w-full flex flex-row gap-32 items-center justify-center">
+                <p>
+                  {`Current Value: ${contractValue}`}
+                </p>
+                <button
+                  className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+                  onClick={fetchContractValue}
+                >
+                  Fetch Value
+                </button>
+              </div>
+            </div>
+            <button
+              className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+              onClick={incrementNumberWithEthers}
+            >
+              Increment With Ethers
+            </button>
+            <button
+              className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+              onClick={incrementNumberWithRawRpc}
+            >
+              Increment With Raw RPC
             </button>
             <pre className="bg-black p-3 rounded overflow-x-auto">
               {transactionResult}
