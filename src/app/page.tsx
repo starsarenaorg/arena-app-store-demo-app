@@ -3,7 +3,7 @@
 import { ethers } from "ethers";
 import {useEffect, useRef, useState} from 'react';
 import {formatEther, parseEther} from 'viem';
-import {ArenaAppStoreSdk} from 'arena-app-store-sdk';
+import type { ArenaAppStoreSdk as ArenaAppStoreSdkType } from 'arena-app-store-sdk';
 
 const INCREMENT_CONTRACT_ADDRESS = '0x8D4B5309Bfcb2e4F927c9C03d68554B404B7EcCe'
 const INCREMENT_CONTRACT_ABI = [
@@ -43,7 +43,7 @@ const INCREMENT_CONTRACT_ABI = [
 ]
 
 export default function Home() {
-  const sdkRef = useRef<ArenaAppStoreSdk | null>(null);
+  const sdkRef = useRef<ArenaAppStoreSdkType | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState<string>('');
   const [profile, setProfile] = useState<string>('');
@@ -55,21 +55,25 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === 'undefined') return; // Prevents SSR error
 
-    const sdk = new ArenaAppStoreSdk({
-      projectId: '8631087374c7fee91d66744f57762ac0',
-      metadata: {
-        name: 'Arena Demo App',
-        description: 'The Arena App Store Demo App',
-        url: window.location.origin,
-        icons: ['https://avatars.githubusercontent.com/u/37784886'],
-      },
-    });
+    (async () => {
+      const { ArenaAppStoreSdk } = await import('arena-app-store-sdk');
 
-    sdk.on('walletChanged', ({ address }: { address: any }) => {
-      setWalletAddress(address || null);
-    });
+      const sdk = new ArenaAppStoreSdk({
+        projectId: '8631087374c7fee91d66744f57762ac0',
+        metadata: {
+          name: 'Arena Demo App',
+          description: 'The Arena App Store Demo App',
+          url: window.location.origin,
+          icons: ['https://avatars.githubusercontent.com/u/37784886'],
+        },
+      });
 
-    sdkRef.current = sdk;
+      sdk.on('walletChanged', ({ address }: { address: any }) => {
+        setWalletAddress(address || null);
+      });
+
+      sdkRef.current = sdk;
+    })();
   }, []);
 
   const getUserProfile = async () => {
