@@ -1,0 +1,86 @@
+steps:
+  - id: "Get Version from tag name"
+    name: gcr.io/cloud-builders/docker
+    entrypoint: "bash"
+    args: ["-c", "echo $TAG_NAME > VERSION"]
+
+  - id: "Build production image"
+    name: gcr.io/cloud-builders/docker
+    env: ["DOCKER_BUILDKIT=1"]
+    entrypoint: "bash"
+    args:
+      - -c
+      - |
+        VERSION="$$(cat VERSION | awk -F "@" '{print $2}')"
+        echo $${VERSION}
+        if [[ $${VERSION} =~ "-stage"  ]] 
+        then
+          echo "Use Dockerfile-stage"
+          docker build --tag $_SERVICE_IMAGE:$${VERSION} --tag $_SERVICE_IMAGE:latest --file ./Dockerfile-stage .  
+        fi
+
+        if [[ $${VERSION} =~ "-prod"  ]] 
+        then
+          echo "Use Dockerfile"
+          docker build --tag $_SERVICE_IMAGE:$${VERSION} --tag $_SERVICE_IMAGE:latest --file ./Dockerfile .
+        fi
+
+        # Push images
+        docker push $_SERVICE_IMAGE:$${VERSION}
+        docker push $_SERVICE_IMAGE:latest
+
+  - id: "Get private key from Secret Manager"
+    name: "gcr.io/cloud-builders/git"
+    secretEnv: ["SSH_KEY"]
+    entrypoint: "bash"
+    args:
+      - -c
+      - |
+        echo "$$SSH_KEY" >> /root/.ssh/id_rsa
+        chmod 400 /root/.ssh/id_rsa
+        ssh-keyscan -t rsa github.com > /root/.ssh/known_hosts
+    volumes:
+      - name: "ssh"
+        path: /root/.ssh
+
+  - id: "Change infra repo for CI/CD"
+    name: "gcr.io/cloud-builders/git"
+    entrypoint: "bash"
+    args:
+      - -c
+      - |
+        VERSION="$$(cat VERSION | awk -F "@" '{print $2}')"
+        git config --global user.email "277531163697@cloudbuild.gserviceaccount.com"
+        git config --global user.name "Cloud Build"
+        git clone ${_INFRA_REPO}
+
+        cd infra/
+
+        if [[ $${VERSION} =~ "-stage"  ]]
+        then
+          sed -i "s|          value:.*|          value: $${VERSION}|" stage/applications/${_DOCKER_IMAGENAME}.yaml
+          git add stage/applications/${_DOCKER_IMAGENAME}.yaml
+          git commit -m "STAGE update image tag for ${_DOCKER_IMAGENAME} to $${VERSION}" --allow-empty
+        fi
+        if [[ $${VERSION} =~ "-prod"  ]]
+        then
+          sed -i "s|          value:.*|          value: $${VERSION}|" production/applications/${_DOCKER_IMAGENAME}.yaml
+          git add production/applications/${_DOCKER_IMAGENAME}.yaml
+          git commit -m "PRODUCTION update image tag for ${_DOCKER_IMAGENAME} to $${VERSION}" --allow-empty
+        fi
+
+        git push
+    volumes:
+      - name: "ssh"
+        path: /root/.ssh
+
+substitutions:
+  _SERVICE_IMAGE: us-central1-docker.pkg.dev/${PROJECT_ID}/${_DOCKER_REGISTRY}/${_DOCKER_IMAGENAME}
+  _DOCKER_REGISTRY: arena
+  _DOCKER_IMAGENAME: arena-demo-app
+  _INFRA_REPO: git@github.com:starsarenaorg/infra.git
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/277531163698/secrets/cloudrun-infra-key/versions/latest
+      env: "SSH_KEY"

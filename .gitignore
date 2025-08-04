@@ -35,7 +35,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /.idea/
-/_cloudbuild/
+#/_cloudbuild/
 /.env
 /public/sw.js
 /public/workbox-c06b064f.js
