@@ -1,8 +1,19 @@
-FROM node:20.18.0-alpine AS base
+FROM node:20.18.0-alpine AS builder
 
 WORKDIR /app
 COPY . .
 
-RUN npm ci
+RUN npm ci && npm run build
 
-CMD ["npm", "run", "dev"]
+FROM node:20.18.0-alpine AS runner
+
+WORKDIR /app
+
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+
+EXPOSE 3481
+
+CMD ["npm", "start"]
