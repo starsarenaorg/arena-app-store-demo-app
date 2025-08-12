@@ -3,7 +3,7 @@
 import { ethers } from "ethers";
 import {useEffect, useRef, useState} from 'react';
 import {formatEther, parseEther} from 'viem';
-import type { ArenaAppStoreSdk as ArenaAppStoreSdkType } from 'arena-app-store-sdk';
+import type { ArenaUserProfile, ArenaAppStoreSdk as ArenaAppStoreSdkType } from 'arena-app-store-sdk';
 
 const INCREMENT_CONTRACT_ADDRESS = '0x8D4B5309Bfcb2e4F927c9C03d68554B404B7EcCe'
 const INCREMENT_CONTRACT_ABI = [
@@ -47,6 +47,7 @@ export default function Home() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState<string>('');
   const [profile, setProfile] = useState<string>('');
+  const [userImageUrl, setUserImageUrl] = useState<string | undefined>(undefined);
   const [transactionResult, setTransactionResult] = useState<string>('');
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
@@ -78,7 +79,9 @@ export default function Home() {
 
   const getUserProfile = async () => {
     try {
-      const result = await sdkRef.current?.sendRequest('getUserProfile');
+      setProfile("fetching...");
+      const result: ArenaUserProfile | undefined | null = await sdkRef.current?.fetchUserProfile();
+      setUserImageUrl(result?.userImageUrl);
       setProfile(JSON.stringify(result, null, 2));
     } catch (err: any) {
       setProfile(`Error: ${err.message}`);
@@ -247,6 +250,13 @@ export default function Home() {
           >
             Get User Profile
           </button>
+          {userImageUrl && (
+            <img
+              src={userImageUrl}
+              alt="User"
+              className="w-12 h-12 rounded-full object-cover border-2 border-blue-400"
+            />
+          )}
           <pre className="bg-black p-3 rounded overflow-x-auto">{profile}</pre>
         </section>
 
