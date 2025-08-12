@@ -3,8 +3,7 @@
 import { ethers } from "ethers";
 import {useEffect, useRef, useState} from 'react';
 import {formatEther, parseEther} from 'viem';
-import type { ArenaAppStoreSdk as ArenaAppStoreSdkType } from 'arena-app-store-sdk';
-import {ArenaUserProfile} from "arena-app-store-sdk/dist/types/ArenaUserProfile";
+import type { ArenaUserProfile, ArenaAppStoreSdk as ArenaAppStoreSdkType } from 'arena-app-store-sdk';
 
 const INCREMENT_CONTRACT_ADDRESS = '0x8D4B5309Bfcb2e4F927c9C03d68554B404B7EcCe'
 const INCREMENT_CONTRACT_ABI = [
@@ -81,7 +80,7 @@ export default function Home() {
   const getUserProfile = async () => {
     try {
       setProfile("fetching...");
-      const result: ArenaUserProfile | undefined = await sdkRef.current?.fetchUserProfile();
+      const result: ArenaUserProfile | undefined | null = await sdkRef.current?.fetchUserProfile();
       setUserImageUrl(result?.userImageUrl);
       setProfile(JSON.stringify(result, null, 2));
     } catch (err: any) {
