@@ -1,9 +1,13 @@
 'use client';
 
-import { ethers } from "ethers";
+import {avalanche} from 'wagmi/chains'; // or avalancheFuji if you're on testnet
+import {ethers} from "ethers";
 import {useEffect, useRef, useState} from 'react';
 import {formatEther, parseEther} from 'viem';
-import type { ArenaUserProfile, ArenaAppStoreSdk as ArenaAppStoreSdkType } from 'arena-app-store-sdk';
+import {
+  ArenaAppStoreSdk as ArenaAppStoreSdkType,
+  ArenaUserProfile
+} from 'arena-app-store-sdk';
 
 const INCREMENT_CONTRACT_ADDRESS = '0x8D4B5309Bfcb2e4F927c9C03d68554B404B7EcCe'
 const INCREMENT_CONTRACT_ABI = [
@@ -52,6 +56,10 @@ export default function Home() {
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [contractValue, setContractValue] = useState<number | string>('?');
+  const [walletAddressByWagmiConnector, setWalletAddressByWagmiConnector] = useState<string | null>(null);
+  const [chainByWagmiConnector, setChainByWagmiConnector] = useState<number | null | undefined>(null);
+  const [balanceByWagmiConnector, setBalanceByWagmiConnector] = useState<string>('');
+  const [contractValueByWagmiConnector, setContractValueByWagmiConnector] = useState<number | string>('?');
 
   useEffect(() => {
     if (typeof window === 'undefined') return; // Prevents SSR error
@@ -220,6 +228,43 @@ export default function Home() {
     }
   }
 
+  const connectWithWagmiConnector = async () => {
+    try {
+      const { ArenaWagmiConnector } = await import("arena-app-store-sdk");
+
+      const sdkProvider = sdkRef.current?.provider as any;
+      if (!sdkProvider) throw new Error('Provider not initialized');
+
+      // Create connector with the SDK’s EIP-1193 provider
+      const connector = new ArenaWagmiConnector({
+        provider: sdkProvider,
+        chains: [avalanche], // swap to avalancheFuji if your contract is on Fuji
+      });
+
+      // Use the OUTPUT of connect()
+      const { account, chain, provider } = await connector.connect();
+
+      // (optional) reflect address in UI
+      if (account) setWalletAddressByWagmiConnector(account);
+      if (chain) setChainByWagmiConnector(chain?.id);
+
+      // Use the provider from connector.connect() to READ the contract
+      const browserProvider = new ethers.BrowserProvider(provider);
+      const balWei = await browserProvider.getBalance(account);
+      setBalanceByWagmiConnector(ethers.formatEther(balWei));
+
+      const contract = new ethers.Contract(
+        INCREMENT_CONTRACT_ADDRESS,
+        INCREMENT_CONTRACT_ABI,
+        browserProvider
+      );
+      const value = await contract.number();
+      setContractValueByWagmiConnector(value.toString());
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-neutral-900 text-white p-8">
       <div className="max-w-2xl mx-auto space-y-8">
@@ -324,6 +369,47 @@ export default function Home() {
             >
               Increment With Raw RPC
             </button>
+            <pre className="bg-black p-3 rounded overflow-x-auto">
+              {transactionResult}
+            </pre>
+          </div>
+        </section>
+
+        <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-semibold">Arena Wagmi Connector</h2>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="w-full flex flex-row gap-32 items-center justify-center">
+                <button
+                  className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+                  onClick={connectWithWagmiConnector}
+                >
+                  Connect With Arena Wagmi Connector
+                </button>
+              </div>
+              <div className="flex flex-col content-start gap-4">
+                <div className="w-full flex flex-row gap-32 items-center justify-center">
+                  <p>
+                    {`Chain By Wagmi Connector: ${chainByWagmiConnector}`}
+                  </p>
+                </div>
+                <div className="w-full flex flex-row gap-32 items-center justify-center">
+                  <p>
+                    {`Address By Wagmi Connector: ${walletAddressByWagmiConnector}`}
+                  </p>
+                </div>
+                <div className="w-full flex flex-row gap-32 items-center justify-center">
+                  <p>
+                    {`Balance By Wagmi Connector: ${balanceByWagmiConnector}`}
+                  </p>
+                </div>
+                <div className="w-full flex flex-row gap-32 items-center justify-center">
+                  <p>
+                    {`Contract Value By Wagmi Connector: ${contractValueByWagmiConnector}`}
+                  </p>
+                </div>
+              </div>
+            </div>
             <pre className="bg-black p-3 rounded overflow-x-auto">
               {transactionResult}
             </pre>
