@@ -10,15 +10,12 @@
     "compile": "npx tsc"
   },
   "dependencies": {
-    "arena-app-store-sdk": "^0.1.11",
-    "@arena-app-store-sdk/wagmi1-connector": "file:../arena-app-store-sdk/packages/wagmi1-connector",
-    "@arena-app-store-sdk/wagmi2-connector": "file:../arena-app-store-sdk/packages/wagmi2-connector",
+    "@the-arena/arena-app-store-sdk": "^0.2.2",
+    "@the-arena/wagmi2-connector": "^0.1.1",
     "ethers": "^6.15.0",
     "next": "15.3.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "viem": "^1.21.4",
-    "wagmi": "^1.4.13"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
