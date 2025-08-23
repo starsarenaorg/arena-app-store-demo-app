@@ -1,6 +1,7 @@
 'use client';
 
-import {avalanche} from 'wagmi/chains'; // or avalancheFuji if you're on testnet
+import {avalanche as wagmiAvalanche} from 'wagmi/chains'; // or avalancheFuji if you're on testnet
+import {avalanche as viemAvalanche} from 'viem/chains';
 import {ethers} from "ethers";
 import {useEffect, useRef, useState} from 'react';
 import {formatEther, parseEther} from 'viem';
@@ -66,6 +67,9 @@ export default function Home() {
   const [chainByWagmi2Connector, setChainByWagmi2Connector] = useState<number | null | undefined>(null);
   const [balanceByWagmi2Connector, setBalanceByWagmi2Connector] = useState<string>('');
   const [contractValueByWagmi2Connector, setContractValueByWagmi2Connector] = useState<number | string>('?');
+  
+  // Store wagmi v2 connector instance to reuse across calls
+  const wagmi2ConnectorRef = useRef<any>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return; // Prevents SSR error
@@ -244,7 +248,7 @@ export default function Home() {
       // Create connector with the SDK’s EIP-1193 provider
       const connector = new ArenaWagmiConnector({
         provider: sdkProvider,
-        chains: [avalanche], // swap to avalancheFuji if your contract is on Fuji
+        chains: [wagmiAvalanche], // swap to avalancheFuji if your contract is on Fuji
       });
 
       // Use the OUTPUT of connect()
@@ -285,7 +289,7 @@ export default function Home() {
 
       // Create a minimal config to instantiate the connector
       const mockConfig = {
-        chains: [avalanche],
+        chains: [viemAvalanche as any] as const,
         emitter: {
           emit: (event: string, data?: any) => {
             console.log(`Event: ${event}`, data);
@@ -293,8 +297,9 @@ export default function Home() {
         }
       };
 
-      // Instantiate the connector
+      // Instantiate the connector and store it for reuse
       const connector = connectorFactory(mockConfig);
+      wagmi2ConnectorRef.current = connector;
 
       // Connect using wagmi v2 API
       const { accounts, chainId } = await connector.connect();
@@ -317,6 +322,58 @@ export default function Home() {
       );
       const value = await contract.number();
       setContractValueByWagmi2Connector(value.toString());
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  };
+
+  const getContractForWagmi2 = async () => {
+    try {
+      // Use the already connected connector instance
+      const connector = wagmi2ConnectorRef.current;
+      if (!connector) throw new Error('Wagmi v2 connector not connected. Please connect first.');
+
+      // Get provider and create contract with signer
+      const provider = await connector.getProvider();
+      const browserProvider = new ethers.BrowserProvider(provider);
+      const signer = await browserProvider.getSigner();
+
+      return new ethers.Contract(
+        INCREMENT_CONTRACT_ADDRESS,
+        INCREMENT_CONTRACT_ABI,
+        signer
+      );
+    } catch (err: any) {
+      throw new Error(`Contract setup failed: ${err.message}`);
+    }
+  };
+
+  const fetchContractValueForWagmi2 = async () => {
+    try {
+      const contract = await getContractForWagmi2();
+      if (!contract) throw new Error('Contract not initialized');
+
+      const value = await contract.number(); // call the view function
+      console.log("Current number (wagmi v2):", value.toString());
+      setContractValueByWagmi2Connector(value.toString());
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  };
+
+  const incrementNumberForWagmi2 = async () => {
+    try {
+      const contract = await getContractForWagmi2();
+      if (!contract) throw new Error('Contract not initialized');
+
+      const tx = await contract.increment(); // send transaction
+      console.log("Transaction sent (wagmi v2):", tx);
+      setTransactionResult(`Transaction sent! Hash: ${tx.hash}`);
+
+      tx.wait().then(() => {
+        setTransactionResult(`Transaction complete!`);
+      });
+
     } catch (err: any) {
       setTransactionResult(`Error: ${err.message}`);
     }
@@ -506,6 +563,20 @@ export default function Home() {
                     {`Contract Value By Wagmi v2 Connector: ${contractValueByWagmi2Connector}`}
                   </p>
                 </div>
+              </div>
+              <div className="flex gap-4 justify-center">
+                <button
+                  className="bg-green-600 px-4 py-2 rounded hover:bg-green-700"
+                  onClick={fetchContractValueForWagmi2}
+                >
+                  Fetch Value (v2)
+                </button>
+                <button
+                  className="bg-orange-600 px-4 py-2 rounded hover:bg-orange-700"
+                  onClick={incrementNumberForWagmi2}
+                >
+                  Increment With Ethers (v2)
+                </button>
               </div>
             </div>
             <pre className="bg-black p-3 rounded overflow-x-auto">
