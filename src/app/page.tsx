@@ -277,13 +277,13 @@ export default function Home() {
 
   const connectWithWagmi2Connector = async () => {
     try {
-      const { arenaWallet } = await import("@arena-app-store-sdk/wagmi2-connector");
+      const { arenaWagmi2ConnectorFactory } = await import("@arena-app-store-sdk/wagmi2-connector");
 
       const sdkProvider = sdkRef.current?.provider as any;
       if (!sdkProvider) throw new Error('Provider not initialized');
 
       // Create wagmi v2 connector factory
-      const connectorFactory = arenaWallet({
+      const connectorFactory = arenaWagmi2ConnectorFactory({
         provider: sdkProvider,
       });
 
