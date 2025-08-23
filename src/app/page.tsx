@@ -240,15 +240,15 @@ export default function Home() {
 
   const connectWithWagmiConnector = async () => {
     try {
-      const { ArenaWagmiConnector } = await import("arena-app-store-sdk");
+      const { ArenaWagmi1Connector } = await import("@arena-app-store-sdk/wagmi1-connector");
 
       const sdkProvider = sdkRef.current?.provider as any;
       if (!sdkProvider) throw new Error('Provider not initialized');
 
-      // Create connector with the SDK’s EIP-1193 provider
-      const connector = new ArenaWagmiConnector({
+      // Create connector with the SDK's EIP-1193 provider
+      const connector = new ArenaWagmi1Connector({
         provider: sdkProvider,
-        chains: [wagmiAvalanche], // swap to avalancheFuji if your contract is on Fuji
+        chains: [wagmiAvalanche as any], // swap to avalancheFuji if your contract is on Fuji
       });
 
       // Use the OUTPUT of connect()
