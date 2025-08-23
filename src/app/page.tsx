@@ -1,13 +1,13 @@
 'use client';
 
-import {avalanche} from 'wagmi/chains'; // or avalancheFuji if you're on testnet
+import {avalanche as viemAvalanche} from 'viem/chains';
 import {ethers} from "ethers";
 import {useEffect, useRef, useState} from 'react';
 import {formatEther, parseEther} from 'viem';
 import {
   ArenaAppStoreSdk as ArenaAppStoreSdkType,
   ArenaUserProfile
-} from 'arena-app-store-sdk';
+} from '@the-arena/arena-app-store-sdk';
 
 const INCREMENT_CONTRACT_ADDRESS = '0x8D4B5309Bfcb2e4F927c9C03d68554B404B7EcCe'
 const INCREMENT_CONTRACT_ABI = [
@@ -56,16 +56,21 @@ export default function Home() {
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [contractValue, setContractValue] = useState<number | string>('?');
-  const [walletAddressByWagmiConnector, setWalletAddressByWagmiConnector] = useState<string | null>(null);
-  const [chainByWagmiConnector, setChainByWagmiConnector] = useState<number | null | undefined>(null);
-  const [balanceByWagmiConnector, setBalanceByWagmiConnector] = useState<string>('');
-  const [contractValueByWagmiConnector, setContractValueByWagmiConnector] = useState<number | string>('?');
+
+  // Wagmi v2 connector states
+  const [walletAddressByWagmi2Connector, setWalletAddressByWagmi2Connector] = useState<string | null>(null);
+  const [chainByWagmi2Connector, setChainByWagmi2Connector] = useState<number | null | undefined>(null);
+  const [balanceByWagmi2Connector, setBalanceByWagmi2Connector] = useState<string>('');
+  const [contractValueByWagmi2Connector, setContractValueByWagmi2Connector] = useState<number | string>('?');
+  
+  // Store wagmi v2 connector instance to reuse across calls
+  const wagmi2ConnectorRef = useRef<any>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return; // Prevents SSR error
 
     (async () => {
-      const { ArenaAppStoreSdk } = await import('arena-app-store-sdk');
+      const { ArenaAppStoreSdk } = await import('@the-arena/arena-app-store-sdk');
 
       const sdk = new ArenaAppStoreSdk({
         projectId: '8631087374c7fee91d66744f57762ac0',
@@ -228,30 +233,45 @@ export default function Home() {
     }
   }
 
-  const connectWithWagmiConnector = async () => {
+  const connectWithWagmi2Connector = async () => {
     try {
-      const { ArenaWagmiConnector } = await import("arena-app-store-sdk");
+      const { arenaWagmi2ConnectorFactory } = await import("@the-arena/wagmi2-connector");
 
       const sdkProvider = sdkRef.current?.provider as any;
       if (!sdkProvider) throw new Error('Provider not initialized');
 
-      // Create connector with the SDK’s EIP-1193 provider
-      const connector = new ArenaWagmiConnector({
+      // Create wagmi v2 connector factory
+      const connectorFactory = arenaWagmi2ConnectorFactory({
         provider: sdkProvider,
-        chains: [avalanche], // swap to avalancheFuji if your contract is on Fuji
       });
 
-      // Use the OUTPUT of connect()
-      const { account, chain, provider } = await connector.connect();
+      // Create a minimal config to instantiate the connector
+      const mockConfig = {
+        chains: [viemAvalanche as any] as const,
+        emitter: {
+          emit: (event: string, data?: any) => {
+            console.log(`Event: ${event}`, data);
+          }
+        }
+      };
 
-      // (optional) reflect address in UI
-      if (account) setWalletAddressByWagmiConnector(account);
-      if (chain) setChainByWagmiConnector(chain?.id);
+      // Instantiate the connector and store it for reuse
+      const connector = connectorFactory(mockConfig);
+      wagmi2ConnectorRef.current = connector;
 
-      // Use the provider from connector.connect() to READ the contract
+      // Connect using wagmi v2 API
+      const { accounts, chainId } = await connector.connect();
+      const account = accounts[0];
+
+      // Reflect address and chain in UI
+      if (account) setWalletAddressByWagmi2Connector(account);
+      if (chainId) setChainByWagmi2Connector(chainId);
+
+      // Get provider and read balance/contract
+      const provider = await connector.getProvider();
       const browserProvider = new ethers.BrowserProvider(provider);
       const balWei = await browserProvider.getBalance(account);
-      setBalanceByWagmiConnector(ethers.formatEther(balWei));
+      setBalanceByWagmi2Connector(ethers.formatEther(balWei));
 
       const contract = new ethers.Contract(
         INCREMENT_CONTRACT_ADDRESS,
@@ -259,7 +279,59 @@ export default function Home() {
         browserProvider
       );
       const value = await contract.number();
-      setContractValueByWagmiConnector(value.toString());
+      setContractValueByWagmi2Connector(value.toString());
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  };
+
+  const getContractForWagmi2 = async () => {
+    try {
+      // Use the already connected connector instance
+      const connector = wagmi2ConnectorRef.current;
+      if (!connector) throw new Error('Wagmi v2 connector not connected. Please connect first.');
+
+      // Get provider and create contract with signer
+      const provider = await connector.getProvider();
+      const browserProvider = new ethers.BrowserProvider(provider);
+      const signer = await browserProvider.getSigner();
+
+      return new ethers.Contract(
+        INCREMENT_CONTRACT_ADDRESS,
+        INCREMENT_CONTRACT_ABI,
+        signer
+      );
+    } catch (err: any) {
+      throw new Error(`Contract setup failed: ${err.message}`);
+    }
+  };
+
+  const fetchContractValueForWagmi2 = async () => {
+    try {
+      const contract = await getContractForWagmi2();
+      if (!contract) throw new Error('Contract not initialized');
+
+      const value = await contract.number(); // call the view function
+      console.log("Current number (wagmi v2):", value.toString());
+      setContractValueByWagmi2Connector(value.toString());
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  };
+
+  const incrementNumberForWagmi2 = async () => {
+    try {
+      const contract = await getContractForWagmi2();
+      if (!contract) throw new Error('Contract not initialized');
+
+      const tx = await contract.increment(); // send transaction
+      console.log("Transaction sent (wagmi v2):", tx);
+      setTransactionResult(`Transaction sent! Hash: ${tx.hash}`);
+
+      tx.wait().then(() => {
+        setTransactionResult(`Transaction complete!`);
+      });
+
     } catch (err: any) {
       setTransactionResult(`Error: ${err.message}`);
     }
@@ -376,38 +448,55 @@ export default function Home() {
         </section>
 
         <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
-          <h2 className="text-2xl font-semibold">Arena Wagmi Connector</h2>
+          <h2 className="text-2xl font-semibold">Arena Wagmi v2 Connector</h2>
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4">
               <div className="w-full flex flex-row gap-32 items-center justify-center">
                 <button
-                  className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
-                  onClick={connectWithWagmiConnector}
+                  className="bg-purple-600 px-4 py-2 rounded hover:bg-purple-700"
+                  onClick={connectWithWagmi2Connector}
                 >
-                  Connect With Arena Wagmi Connector
+                  Connect
                 </button>
               </div>
               <div className="flex flex-col content-start gap-4">
                 <div className="w-full flex flex-row gap-32 items-center justify-center">
                   <p>
-                    {`Chain By Wagmi Connector: ${chainByWagmiConnector}`}
+                    {`Chain By Wagmi v2 Connector: ${chainByWagmi2Connector}`}
+                  </p>
+                </div>
+                <div className="w-full flex flex-col items-center justify-center">
+                  <p>
+                    {`Address By Wagmi v2 Connector:`}
+                  </p>
+                  <p>
+                    {`${walletAddressByWagmi2Connector}`}
                   </p>
                 </div>
                 <div className="w-full flex flex-row gap-32 items-center justify-center">
                   <p>
-                    {`Address By Wagmi Connector: ${walletAddressByWagmiConnector}`}
+                    {`Balance By Wagmi v2 Connector: ${balanceByWagmi2Connector}`}
                   </p>
                 </div>
                 <div className="w-full flex flex-row gap-32 items-center justify-center">
                   <p>
-                    {`Balance By Wagmi Connector: ${balanceByWagmiConnector}`}
+                    {`Contract Value By Wagmi v2 Connector: ${contractValueByWagmi2Connector}`}
                   </p>
                 </div>
-                <div className="w-full flex flex-row gap-32 items-center justify-center">
-                  <p>
-                    {`Contract Value By Wagmi Connector: ${contractValueByWagmiConnector}`}
-                  </p>
-                </div>
+              </div>
+              <div className="flex gap-4 justify-center">
+                <button
+                  className="bg-green-600 px-4 py-2 rounded hover:bg-green-700"
+                  onClick={fetchContractValueForWagmi2}
+                >
+                  Fetch Value With Wagmi
+                </button>
+                <button
+                  className="bg-orange-600 px-4 py-2 rounded hover:bg-orange-700"
+                  onClick={incrementNumberForWagmi2}
+                >
+                  Increment With Wagmi
+                </button>
               </div>
             </div>
             <pre className="bg-black p-3 rounded overflow-x-auto">
