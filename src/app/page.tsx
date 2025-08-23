@@ -60,6 +60,12 @@ export default function Home() {
   const [chainByWagmiConnector, setChainByWagmiConnector] = useState<number | null | undefined>(null);
   const [balanceByWagmiConnector, setBalanceByWagmiConnector] = useState<string>('');
   const [contractValueByWagmiConnector, setContractValueByWagmiConnector] = useState<number | string>('?');
+  
+  // Wagmi v2 connector states
+  const [walletAddressByWagmi2Connector, setWalletAddressByWagmi2Connector] = useState<string | null>(null);
+  const [chainByWagmi2Connector, setChainByWagmi2Connector] = useState<number | null | undefined>(null);
+  const [balanceByWagmi2Connector, setBalanceByWagmi2Connector] = useState<string>('');
+  const [contractValueByWagmi2Connector, setContractValueByWagmi2Connector] = useState<number | string>('?');
 
   useEffect(() => {
     if (typeof window === 'undefined') return; // Prevents SSR error
@@ -265,6 +271,57 @@ export default function Home() {
     }
   };
 
+  const connectWithWagmi2Connector = async () => {
+    try {
+      const { arenaWallet } = await import("@arena-app-store-sdk/wagmi2-connector");
+
+      const sdkProvider = sdkRef.current?.provider as any;
+      if (!sdkProvider) throw new Error('Provider not initialized');
+
+      // Create wagmi v2 connector factory
+      const connectorFactory = arenaWallet({
+        provider: sdkProvider,
+      });
+
+      // Create a minimal config to instantiate the connector
+      const mockConfig = {
+        chains: [avalanche],
+        emitter: {
+          emit: (event: string, data?: any) => {
+            console.log(`Event: ${event}`, data);
+          }
+        }
+      };
+
+      // Instantiate the connector
+      const connector = connectorFactory(mockConfig);
+
+      // Connect using wagmi v2 API
+      const { accounts, chainId } = await connector.connect();
+      const account = accounts[0];
+
+      // Reflect address and chain in UI
+      if (account) setWalletAddressByWagmi2Connector(account);
+      if (chainId) setChainByWagmi2Connector(chainId);
+
+      // Get provider and read balance/contract
+      const provider = await connector.getProvider();
+      const browserProvider = new ethers.BrowserProvider(provider);
+      const balWei = await browserProvider.getBalance(account);
+      setBalanceByWagmi2Connector(ethers.formatEther(balWei));
+
+      const contract = new ethers.Contract(
+        INCREMENT_CONTRACT_ADDRESS,
+        INCREMENT_CONTRACT_ABI,
+        browserProvider
+      );
+      const value = await contract.number();
+      setContractValueByWagmi2Connector(value.toString());
+    } catch (err: any) {
+      setTransactionResult(`Error: ${err.message}`);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-neutral-900 text-white p-8">
       <div className="max-w-2xl mx-auto space-y-8">
@@ -406,6 +463,47 @@ export default function Home() {
                 <div className="w-full flex flex-row gap-32 items-center justify-center">
                   <p>
                     {`Contract Value By Wagmi Connector: ${contractValueByWagmiConnector}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <pre className="bg-black p-3 rounded overflow-x-auto">
+              {transactionResult}
+            </pre>
+          </div>
+        </section>
+
+        <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-semibold">Arena Wagmi v2 Connector</h2>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="w-full flex flex-row gap-32 items-center justify-center">
+                <button
+                  className="bg-purple-600 px-4 py-2 rounded hover:bg-purple-700"
+                  onClick={connectWithWagmi2Connector}
+                >
+                  Connect With Arena Wagmi v2 Connector
+                </button>
+              </div>
+              <div className="flex flex-col content-start gap-4">
+                <div className="w-full flex flex-row gap-32 items-center justify-center">
+                  <p>
+                    {`Chain By Wagmi v2 Connector: ${chainByWagmi2Connector}`}
+                  </p>
+                </div>
+                <div className="w-full flex flex-row gap-32 items-center justify-center">
+                  <p>
+                    {`Address By Wagmi v2 Connector: ${walletAddressByWagmi2Connector}`}
+                  </p>
+                </div>
+                <div className="w-full flex flex-row gap-32 items-center justify-center">
+                  <p>
+                    {`Balance By Wagmi v2 Connector: ${balanceByWagmi2Connector}`}
+                  </p>
+                </div>
+                <div className="w-full flex flex-row gap-32 items-center justify-center">
+                  <p>
+                    {`Contract Value By Wagmi v2 Connector: ${contractValueByWagmi2Connector}`}
                   </p>
                 </div>
               </div>
