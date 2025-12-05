@@ -1,4 +1,31 @@
 steps:
+  - id: "Create notification template"
+    name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        COMMIT_MSG=$$(git log -1 --pretty='%s' "$SHORT_SHA" | head -c 100)
+
+        echo "repo: <https://github.com/starsarenaorg/$REPO_NAME|$REPO_NAME>
+        tag: $TAG_NAME
+        commit: <https://github.com/starsarenaorg/$REPO_NAME/commit/$SHORT_SHA|$SHORT_SHA>, $${COMMIT_MSG}
+        build: <https://console.cloud.google.com/cloud-build/builds/$BUILD_ID?project=$PROJECT_ID|$BUILD_ID>" > /workspace/NOTIFICATION_MSG
+
+  - id: "Notify build start"
+    name: gcr.io/cloud-builders/curl
+    secretEnv: ["SLACK_WEBHOOK_URL"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        STATUS="🚀 *Build started*"
+        NOTIFICATION_MSG=$$(cat /workspace/NOTIFICATION_MSG)
+
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"$$STATUS\n$$NOTIFICATION_MSG\"}" \
+          "$$SLACK_WEBHOOK_URL"
+
   - id: "Get Version from tag name"
     name: gcr.io/cloud-builders/docker
     entrypoint: "bash"
@@ -74,6 +101,20 @@ steps:
       - name: "ssh"
         path: /root/.ssh
 
+  - id: "Notify build end"
+    name: gcr.io/cloud-builders/curl
+    secretEnv: ["SLACK_WEBHOOK_URL"]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        STATUS="✅ *Build succeeded!*"
+        NOTIFICATION_MSG=$$(cat /workspace/NOTIFICATION_MSG)
+
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\":\"$$STATUS\n$$NOTIFICATION_MSG\"}" \
+          "$$SLACK_WEBHOOK_URL"
+
 substitutions:
   _SERVICE_IMAGE: us-central1-docker.pkg.dev/${PROJECT_ID}/${_DOCKER_REGISTRY}/${_DOCKER_IMAGENAME}
   _DOCKER_REGISTRY: arena
@@ -84,3 +125,5 @@ availableSecrets:
   secretManager:
     - versionName: projects/277531163698/secrets/cloudrun-infra-key/versions/latest
       env: "SSH_KEY"
+    - versionName: projects/277531163698/secrets/slack_webhook_url/versions/latest
+      env: SLACK_WEBHOOK_URL
