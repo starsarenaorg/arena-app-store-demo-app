@@ -1,4 +1,5 @@
 'use client';
+import pkg from '../../package.json';
 
 import {avalanche as viemAvalanche} from 'viem/chains';
 import {ethers} from "ethers";
@@ -419,6 +420,11 @@ export default function Home() {
     <main className="min-h-screen bg-neutral-900 text-white p-8">
       <div className="max-w-2xl mx-auto space-y-8">
         <h1 className="text-4xl font-bold">Arena Demo App</h1>
+        <div className="text-sm text-neutral-400 font-mono">
+            <p>App Version: {pkg.version}</p>
+            <p>SDK Version: {pkg.dependencies['@the-arena/arena-app-store-sdk']}</p>
+            <p>Wagmi Connector Version: {pkg.dependencies['@the-arena/wagmi2-connector']}</p>
+        </div>
 
         <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
           <h2 className="text-2xl font-semibold">Wallet Info</h2>

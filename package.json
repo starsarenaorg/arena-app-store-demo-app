@@ -1,13 +1,14 @@
 {
   "name": "arena-app-store-demo-app",
-  "version": "0.1.0",
+  "version": "0.0.18",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3481 --turbopack",
     "build": "next build",
     "start": "next start -p 3481 ",
     "lint": "eslint 'src/**/*.{ts,js}'",
-    "compile": "npx tsc"
+    "compile": "npx tsc",
+    "release:stage": "git tag arena-demo-app@$(npm pkg get version | tr -d '\"')-stage && git push origin arena-demo-app@$(npm pkg get version | tr -d '\"')-stage"
   },
   "dependencies": {
     "@the-arena/arena-app-store-sdk": "^0.2.4",
