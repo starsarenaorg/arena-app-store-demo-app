@@ -10,8 +10,8 @@
     "compile": "npx tsc"
   },
   "dependencies": {
-    "@the-arena/arena-app-store-sdk": "^0.2.2",
-    "@the-arena/wagmi2-connector": "^0.1.1",
+    "@the-arena/arena-app-store-sdk": "^0.2.4",
+    "@the-arena/wagmi2-connector": "^0.2.4",
     "ethers": "^6.15.0",
     "next": "15.3.4",
     "react": "^19.0.0",

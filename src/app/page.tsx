@@ -52,9 +52,14 @@ export default function Home() {
   const [balance, setBalance] = useState<string>('');
   const [profile, setProfile] = useState<string>('');
   const [userImageUrl, setUserImageUrl] = useState<string | undefined>(undefined);
-  const [transactionResult, setTransactionResult] = useState<string>('');
+
+  // Transaction states
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
+  const [sendTxResult, setSendTxResult] = useState<string>('');
+
+  // Contract states
+  const [incrementResult, setIncrementResult] = useState<string>('');
   const [contractValue, setContractValue] = useState<number | string>('?');
 
   // Wagmi v2 connector states
@@ -62,7 +67,16 @@ export default function Home() {
   const [chainByWagmi2Connector, setChainByWagmi2Connector] = useState<number | null | undefined>(null);
   const [balanceByWagmi2Connector, setBalanceByWagmi2Connector] = useState<string>('');
   const [contractValueByWagmi2Connector, setContractValueByWagmi2Connector] = useState<number | string>('?');
-  
+  const [wagmiResult, setWagmiResult] = useState<string>('');
+
+  // Sign Message states
+  const [messageToSign, setMessageToSign] = useState<string>('');
+  const [signResult, setSignResult] = useState<string>('');
+  const [verifyResult, setVerifyResult] = useState<string>('');
+
+  // Sign Profile states
+  const [signProfileResult, setSignProfileResult] = useState<string>('');
+
   // Store wagmi v2 connector instance to reuse across calls
   const wagmi2ConnectorRef = useRef<any>(null);
 
@@ -136,9 +150,9 @@ export default function Home() {
         }],
       });
 
-      setTransactionResult(`Transaction sent! Hash: ${txHash}`);
+      setSendTxResult(`Transaction sent! Hash: ${txHash}`);
     } catch (err: any) {
-      setTransactionResult(`Error: ${err.message}`);
+      setSendTxResult(`Error: ${err.message}`);
     }
   };
 
@@ -156,7 +170,8 @@ export default function Home() {
         signer
       );
     } catch (err: any) {
-      setTransactionResult(`Error: ${err.message}`);
+      console.error(err);
+      throw err;
     }
   }
 
@@ -176,14 +191,14 @@ export default function Home() {
 
       const tx = await contract.increment(); // send transaction
       console.log("Transaction sent:", tx);
-      setTransactionResult(`Transaction sent! Hash: ${tx.hash}`);
+      setIncrementResult(`Transaction sent! Hash: ${tx.hash}`);
 
       tx.wait().then(() => {
-        setTransactionResult(`Transaction complete!`);
+        setIncrementResult(`Transaction complete!`);
       });
 
     } catch (err: any) {
-      setTransactionResult(`Error: ${err.message}`);
+      setIncrementResult(`Error: ${err.message}`);
     }
   }
 
@@ -218,18 +233,18 @@ export default function Home() {
         }],
       });
 
-      setTransactionResult(`Transaction sent! Hash: ${txHash}`);
+      setIncrementResult(`Transaction sent! Hash: ${txHash}`);
 
       const receipt = await waitForTransaction(provider, txHash);
 
       if (receipt.status === "0x1") {
-        setTransactionResult(`✅ Transaction confirmed in block ${parseInt(receipt.blockNumber, 16)}`);
+        setIncrementResult(`✅ Transaction confirmed in block ${parseInt(receipt.blockNumber, 16)}`);
       } else {
-        setTransactionResult(`❌ Transaction failed`);
+        setIncrementResult(`❌ Transaction failed`);
       }
 
     } catch (err: any) {
-      setTransactionResult(`Error: ${err.message}`);
+      setIncrementResult(`Error: ${err.message}`);
     }
   }
 
@@ -281,7 +296,7 @@ export default function Home() {
       const value = await contract.number();
       setContractValueByWagmi2Connector(value.toString());
     } catch (err: any) {
-      setTransactionResult(`Error: ${err.message}`);
+      setWagmiResult(`Error: ${err.message}`);
     }
   };
 
@@ -315,7 +330,7 @@ export default function Home() {
       console.log("Current number (wagmi v2):", value.toString());
       setContractValueByWagmi2Connector(value.toString());
     } catch (err: any) {
-      setTransactionResult(`Error: ${err.message}`);
+      setWagmiResult(`Error: ${err.message}`);
     }
   };
 
@@ -326,16 +341,79 @@ export default function Home() {
 
       const tx = await contract.increment(); // send transaction
       console.log("Transaction sent (wagmi v2):", tx);
-      setTransactionResult(`Transaction sent! Hash: ${tx.hash}`);
+      setWagmiResult(`Transaction sent! Hash: ${tx.hash}`);
 
       tx.wait().then(() => {
-        setTransactionResult(`Transaction complete!`);
+        setWagmiResult(`Transaction complete!`);
       });
 
     } catch (err: any) {
-      setTransactionResult(`Error: ${err.message}`);
+      setWagmiResult(`Error: ${err.message}`);
     }
   };
+
+  const signMessage = async () => {
+    try {
+      const provider = sdkRef.current?.provider;
+      const account = provider?.accounts[0];
+
+      if (!provider || !account) throw new Error('Wallet not connected');
+      if (!messageToSign) throw new Error('Please enter a message to sign');
+
+      const hexMessage = `0x${Buffer.from(messageToSign, 'utf8').toString('hex')}`;
+
+      const signature = await provider.request({
+        method: 'personal_sign',
+        params: [hexMessage, account],
+      });
+
+      setSignResult(signature as string);
+      setVerifyResult('');
+    } catch (err: any) {
+      setSignResult(`Error: ${err.message}`);
+    }
+  };
+
+  const verifySignature = async () => {
+    try {
+      if (!messageToSign || !signResult || signResult.startsWith('Error')) throw new Error('No message or valid signature to verify');
+
+      const signerAddr = ethers.verifyMessage(messageToSign, signResult);
+      if (walletAddress && signerAddr.toLowerCase() === walletAddress.toLowerCase()) {
+        setVerifyResult('✅ Valid Signature (matches connected wallet)');
+      } else {
+        setVerifyResult(`❌ Invalid Signature (signer: ${signerAddr})`);
+      }
+    } catch (err: any) {
+      setVerifyResult(`Error: ${err.message}`);
+    }
+  };
+
+  const signUserProfile = async () => {
+    try {
+      setSignProfileResult("Fetching user profile...");
+      const userProfile = await sdkRef.current?.fetchUserProfile();
+
+      if (!userProfile) throw new Error("Could not fetch user profile");
+
+      const profileString = JSON.stringify(userProfile, null, 2);
+      const hexMessage = `0x${Buffer.from(profileString, 'utf8').toString('hex')}`;
+
+      const provider = sdkRef.current?.provider;
+      const account = provider?.accounts[0];
+      if (!provider || !account) throw new Error('Wallet not connected');
+
+      const signature = await provider.request({
+        method: 'personal_sign',
+        params: [hexMessage, account],
+      });
+
+      setSignProfileResult(`Profile:\n${profileString}\n\nSignature:\n${signature}`);
+
+    } catch (err: any) {
+      setSignProfileResult(`Error: ${err.message}`);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-neutral-900 text-white p-8">
@@ -408,9 +486,56 @@ export default function Home() {
               Send AVAX
             </button>
             <pre className="bg-black p-3 rounded overflow-x-auto">
-              {transactionResult}
+              {sendTxResult}
             </pre>
           </div>
+        </section>
+
+        <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-semibold">Sign Message</h2>
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="block mb-1">Message:</label>
+              <textarea
+                className="w-full bg-neutral-700 text-white p-2 rounded"
+                placeholder="Enter message to sign..."
+                value={messageToSign}
+                onChange={(e) => setMessageToSign(e.target.value)}
+              />
+            </div>
+              <button
+              className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+              onClick={signMessage}
+            >
+              Sign Message
+            </button>
+            <pre className="bg-black p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">
+              {signResult}
+            </pre>
+
+            <button
+              className="bg-green-600 px-4 py-2 rounded hover:bg-green-700"
+              onClick={verifySignature}
+            >
+              Verify Signature
+            </button>
+            <pre className="bg-black p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">
+              {verifyResult}
+            </pre>
+          </div>
+        </section>
+
+        <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-semibold">Sign User Profile</h2>
+          <button
+            className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+            onClick={signUserProfile}
+          >
+            Sign User Profile
+          </button>
+          <pre className="bg-black p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">
+            {signProfileResult}
+          </pre>
         </section>
 
         <section className="bg-neutral-800 p-6 rounded-lg space-y-4">
@@ -442,7 +567,7 @@ export default function Home() {
               Increment With Raw RPC
             </button>
             <pre className="bg-black p-3 rounded overflow-x-auto">
-              {transactionResult}
+              {incrementResult}
             </pre>
           </div>
         </section>
@@ -500,7 +625,7 @@ export default function Home() {
               </div>
             </div>
             <pre className="bg-black p-3 rounded overflow-x-auto">
-              {transactionResult}
+              {wagmiResult}
             </pre>
           </div>
         </section>
