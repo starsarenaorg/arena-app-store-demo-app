@@ -1,6 +1,6 @@
 {
   "name": "arena-app-store-demo-app",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3481 --turbopack",
@@ -11,8 +11,8 @@
     "release:stage": "git tag arena-demo-app@$(npm pkg get version | tr -d '\"')-stage && git push origin arena-demo-app@$(npm pkg get version | tr -d '\"')-stage"
   },
   "dependencies": {
-    "@the-arena/arena-app-store-sdk": "^0.2.4",
-    "@the-arena/wagmi2-connector": "^0.2.4",
+    "@the-arena/arena-app-store-sdk": "0.2.4",
+    "@the-arena/wagmi2-connector": "0.2.4",
     "ethers": "^6.15.0",
     "next": "15.3.4",
     "react": "^19.0.0",
