@@ -21,6 +21,7 @@ steps:
           exit 1
         fi
 
+
   - id: "Get Version from tag name"
     name: gcr.io/cloud-builders/docker
     entrypoint: "bash"
