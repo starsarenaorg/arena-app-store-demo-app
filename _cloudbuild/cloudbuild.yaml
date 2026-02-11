@@ -51,6 +51,7 @@ steps:
         docker push $_SERVICE_IMAGE:$${VERSION}
         docker push $_SERVICE_IMAGE:latest
 
+
   - id: "Get private key from Secret Manager"
     name: "gcr.io/cloud-builders/git"
     secretEnv: ["SSH_KEY"]
