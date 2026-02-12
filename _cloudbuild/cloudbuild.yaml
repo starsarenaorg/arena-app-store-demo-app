@@ -1,4 +1,27 @@
 steps:
+  - id: "Check deploy author"
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    secretEnv: 
+      - "ALLOW_USERS_ARENA_APP_STORE_DEMO_APP"
+    args:
+      - '-c'
+      - |
+        apt-get update && apt-get install -y jq
+
+        echo "Pusher email: $_PUSHER_EMAIL"
+        
+        if [[ -z "$_PUSHER_EMAIL" ]]; then
+          echo "⚠️  No pusher email found"
+          exit 1
+        elif echo "$$ALLOW_USERS_ARENA_APP_STORE_DEMO_APP" | jq -e --arg email "$_PUSHER_EMAIL" '.users[] == $email' > /dev/null; then
+          echo "✅ $_PUSHER_EMAIL authorized to push tags"
+        else
+          echo "❌ $_PUSHER_EMAIL not in ALLOW_USERS_ARENA_APP_STORE_DEMO_APP"
+          exit 1
+        fi
+
+
   - id: "Get Version from tag name"
     name: gcr.io/cloud-builders/docker
     entrypoint: "bash"
@@ -28,6 +51,7 @@ steps:
         # Push images
         docker push $_SERVICE_IMAGE:$${VERSION}
         docker push $_SERVICE_IMAGE:latest
+
 
   - id: "Get private key from Secret Manager"
     name: "gcr.io/cloud-builders/git"
@@ -84,3 +108,5 @@ availableSecrets:
   secretManager:
     - versionName: projects/277531163698/secrets/cloudrun-infra-key/versions/latest
       env: "SSH_KEY"
+    - versionName: projects/$PROJECT_ID/secrets/ALLOW_USERS_ARENA_APP_STORE_DEMO_APP/versions/latest
+      env: ALLOW_USERS_ARENA_APP_STORE_DEMO_APP
